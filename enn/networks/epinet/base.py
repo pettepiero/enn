@@ -18,8 +18,10 @@ import dataclasses
 from typing import Callable, Optional, Tuple
 
 import chex
+import enn
 from enn import base
 from enn.checkpoints import base as checkpoint_base
+import enn.checkpoints
 from enn.networks import base as networks_base
 from enn.networks import utils as networks_utils
 import haiku as hk
@@ -73,7 +75,7 @@ def combine_base_epinet_as_enn(
     base_scale: float = 1,
     freeze_base: bool = True,
 ) -> networks_base.EnnArray:
-  """Returns a combined ENN from a base network and an epinet.
+    """Returns a combined ENN from a base network and an epinet.
 
   Args:
     base_checkpoint: checkpoint of base model ENN.
@@ -85,54 +87,54 @@ def combine_base_epinet_as_enn(
       specific just to the epinet. If False, then the parameters/state are
       combined with those of the base network. Useful for finetuning.
   """
-  # TODO(author2): Add testing to this function.
+    # TODO(author2): Add testing to this function.
 
-  # Parse the base network from checkpoint
-  base_params_init, base_state_init = base_checkpoint.load_fn()
-  base_enn = base_checkpoint.enn_ctor()
-  if base_index is None:
-    base_index = base_enn.indexer(jax.random.PRNGKey(0))
+    # Parse the base network from checkpoint
+    base_params_init, base_state_init = base_checkpoint.load_fn()
+    base_enn = base_checkpoint.enn_ctor()
+    if base_index is None:
+        base_index = base_enn.indexer(jax.random.PRNGKey(0))
 
-  def apply(
+    def apply(
       params: hk.Params,
       state: hk.State,
       inputs: chex.Array,
       index: base.Index,
   ) -> Tuple[networks_base.OutputWithPrior, hk.State]:
-    """Applies the base network and epinet."""
-    if freeze_base:
-      base_params, base_state = base_params_init, base_state_init
-    else:
-      base_params, base_state = params, state
+        """Applies the base network and epinet."""
+        if freeze_base:
+            base_params, base_state = base_params_init, base_state_init
+        else:
+            base_params, base_state = params, state
 
-    # Forward the base network
-    base_out, base_state = base_enn.apply(
+        # Forward the base network
+        base_out, base_state = base_enn.apply(
         base_params, base_state, inputs, base_index)
-    base_out = networks_utils.parse_to_output_with_prior(base_out)
+        base_out = networks_utils.parse_to_output_with_prior(base_out)
 
-    # Forward the epinet and combine their outputs
-    epi_out, epi_state = epinet.apply(
+        # Forward the epinet and combine their outputs
+        epi_out, epi_state = epinet.apply(
         params, state, inputs, index, parse_hidden(base_out))
 
-    output = networks_base.OutputWithPrior(
+        output = networks_base.OutputWithPrior(
         train=base_out.train * base_scale + epi_out.train,
         prior=base_out.prior * base_scale + epi_out.prior,
     )
-    state = epi_state if freeze_base else {**base_state, **epi_state}
-    return output, state
+        state = epi_state if freeze_base else {**base_state, **epi_state}
+        return output, state
 
-  def init(key: chex.PRNGKey,
+    def init(key: chex.PRNGKey,
            inputs: chex.Array,
            index: base.Index) -> Tuple[hk.Params, hk.State]:
-    """Initializes the epinet."""
-    base_out, unused_base_state = base_enn.apply(
+        """Initializes the epinet."""
+        base_out, unused_base_state = base_enn.apply(
         base_params_init, base_state_init, inputs, base_index)
-    params, state = epinet.init(
+        params, state = epinet.init(
         key, inputs, index, parse_hidden(base_out))
 
-    if freeze_base:
-      return params, state
-    else:
-      return {**params, **base_params_init}, {**state, **base_state_init}
+        if freeze_base:
+            return params, state
+        else:
+            return {**params, **base_params_init}, {**state, **base_state_init}
 
-  return networks_base.EnnArray(apply, init, epinet.indexer)
+    return networks_base.EnnArray(apply, init, epinet.indexer)

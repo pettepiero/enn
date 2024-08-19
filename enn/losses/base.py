@@ -75,10 +75,11 @@ def average_single_index_loss(
     batched_loss = jax.vmap(single_loss, in_axes=[None, None, None, None, 0])
     loss, (new_state, metrics) = batched_loss(
         enn.apply, params, state, batch, batched_indexer(key))
-
+    
     # Take the mean over the synthetic index batch dimension
     batch_mean = lambda x: jnp.mean(x, axis=0)
     mean_loss = batch_mean(loss)
+
 
     if new_state:
       # TODO(author2): This section is a bit of a hack, since we do not have

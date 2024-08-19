@@ -39,8 +39,8 @@ pip install .
 
 # Install test dependencies.
 pip install .[testing]
-
 N_CPU=$(grep -c ^processor /proc/cpuinfo)
+N_CPU=4
 
 # Run static type-checking.
 pytype -j "${N_CPU}" enn

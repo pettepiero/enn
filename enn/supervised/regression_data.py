@@ -51,17 +51,24 @@ def make_dataset(extra_input_dim: int = 1) -> datasets.ArrayBatchIterator:
 def make_plot(experiment: supervised_base.BaseExperiment,
               num_sample: int = 20,
               extra_input_dim: int = 1) -> gg.ggplot:
-  """Generate a regression plot with sampled predictions."""
-  plot_df = make_plot_data(
+    """Generate a regression plot with sampled predictions."""
+    plot_df = make_plot_data(
       experiment, num_sample=num_sample, extra_input_dim=extra_input_dim)
 
-  p = (gg.ggplot()
+    print(f"DEBUG: Printing num_sample: {num_sample}")
+    print(f"DEBUG: plot_df.shape = {plot_df.shape}")
+
+    plot_df["k"] = plot_df["k"].astype(
+        "category"
+    )  # Convert k to a categorical variable
+
+    p = (gg.ggplot()
        + gg.aes('x', 'y')
        + gg.geom_point(data=make_regression_df(), size=3, colour='blue')
-       + gg.geom_line(gg.aes(group='k'), data=plot_df, alpha=0.5)
+       + gg.geom_line(gg.aes(group='k', color='k'), data=plot_df, alpha=0.5)
       )
 
-  return p
+    return p
 
 
 def make_plot_data(experiment: supervised_base.BaseExperiment,

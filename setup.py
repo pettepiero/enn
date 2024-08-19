@@ -65,7 +65,7 @@ setuptools.setup(
         'scikit-learn',
         'tensorflow',  # to be compatible with dm-acme
         'tensorflow-datasets',  # to be compatible with dm-acme
-        'tensorflow_probability',  # to be compatible with dm-acme
+        'tensorflow_probability[tf]',  # to be compatible with dm-acme
         'typing-extensions',
     ],
     extras_require={

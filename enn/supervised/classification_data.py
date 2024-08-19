@@ -125,8 +125,9 @@ def make_mean_plot_data(
 
 
 def colab_plots(experiment: supervised_base.BaseExperiment):
-  plot_df = make_plot_data(experiment, num_sample=100)
-  dataframe = make_dataframe(experiment.dataset)
-  make_mean_plot(plot_df, dataframe).draw()
-  make_sample_plot(plot_df[plot_df['sample'] < 12],
-                   dataframe).draw()
+    plot_df = make_plot_data(experiment, num_sample=100)
+    dataframe = make_dataframe(experiment.dataset)
+    p_mean = make_mean_plot(plot_df, dataframe)
+    p_sample = make_sample_plot(plot_df[plot_df["sample"] < 12], dataframe)
+
+    #return p_mean, p_sample
