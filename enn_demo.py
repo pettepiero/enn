@@ -106,6 +106,14 @@ experiment.train(FLAGS.num_batch)
 
 
 # @title Plot the output
-p = regression_data.make_plot(experiment=experiment, num_sample=10)
-_ = p.draw()
-_.savefig("./regression.png", dpi=300)
+# p = regression_data.make_plot(experiment=experiment, num_sample=10)
+# _ = p.draw()
+# _.savefig("./regression.png", dpi=300)
+
+
+datapoint = next(dataset).x
+print(type(datapoint))
+print(datapoint.shape)
+print(f"\nDEBUG: datapoint: {datapoint}\n")
+result = enn.apply(enn.state.params, datapoint)
+print(f"\nDEBUG: result: {result}\n")
