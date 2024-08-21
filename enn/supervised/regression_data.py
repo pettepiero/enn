@@ -36,16 +36,30 @@ def make_regression_df() -> pd.DataFrame:
   y = x + np.sin(3 * x) + np.sin(12 * x) + w
   return pd.DataFrame({'x': x, 'y': y}).reset_index()
 
+def plot_df(df: pd.DataFrame, filename: str = "./dataset_image.png") -> None:
+    """Plots the regression dataset."""
+    p = (gg.ggplot(df)
+       + gg.aes('x', 'y')
+       + gg.geom_point()
+       + gg.ylim(-9, 1)
+       + gg.xlim(-1, 2)
+      )
+    p.save(filename, dpi=300)
 
-def make_dataset(extra_input_dim: int = 1) -> datasets.ArrayBatchIterator:
-  """Factory method to produce an iterator of Batches."""
-  df = make_regression_df()
-  data = datasets.ArrayBatch(
-      x=np.vstack([df['x'].values, np.ones((extra_input_dim, len(df)))]).T,
-      y=df['y'].values[:, None],
-  )
-  chex.assert_shape(data.x, (None, 1 + extra_input_dim))
-  return utils.make_batch_iterator(data)
+
+def make_dataset(
+    extra_input_dim: int = 1, plot_df_flag: bool = False
+) -> datasets.ArrayBatchIterator:
+    """Factory method to produce an iterator of Batches."""
+    df = make_regression_df()
+    if plot_df_flag:
+        plot_df(df)
+    data = datasets.ArrayBatch(
+        x=np.vstack([df["x"].values, np.ones((extra_input_dim, len(df)))]).T,
+        y=df["y"].values[:, None],
+    )
+    chex.assert_shape(data.x, (None, 1 + extra_input_dim))
+    return utils.make_batch_iterator(data)
 
 
 def make_plot(experiment: supervised_base.BaseExperiment,

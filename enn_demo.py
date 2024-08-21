@@ -35,31 +35,12 @@ from enn.supervised import regression_data
 
 import importlib
 
-importlib.reload(regression_data)
-importlib.reload(losses)
-
-
-# @title ENN imports
-import enn
-from enn import losses
-from enn import networks
-from enn import supervised
-from enn import base
-from enn import data_noise
-from enn import utils
-from enn.loggers import TerminalLogger
-from enn.supervised import classification_data
-from enn.supervised import regression_data
-
-import importlib
-
-importlib.reload(regression_data)
-importlib.reload(losses)
+from jaxlib.xla_extension import ArrayImpl
 
 
 @dataclasses.dataclass
 class Config:
-    num_batch: int = 1_000
+    num_batch: int = 100    #changed from 1000 to 100
     index_dim: int = 10
     num_index_samples: int = 10
     seed: int = 0
@@ -70,11 +51,10 @@ class Config:
 
 FLAGS = Config()
 
-
 # @title Create the regression experiment
 
 # Generate dataset
-dataset = regression_data.make_dataset()
+dataset = regression_data.make_dataset(plot_df_flag=False)
 
 # Logger
 logger = TerminalLogger("supervised_regression")
@@ -102,18 +82,67 @@ experiment = supervised.Experiment(
 )
 
 # Train the experiment
-experiment.train(FLAGS.num_batch)
+# experiment.train(FLAGS.num_batch)
+
+for iteration in range(FLAGS.num_batch):
+    experiment.step += 1
+    batch = next(experiment.dataset)
+    key = next(experiment.rng)
+
+    experiment.state, loss_metrics = experiment._sgd_step(
+        training_state=experiment.state,
+        batch=batch, 
+        key=key
+    )
+
+# print(
+#     f"\nDEBUG: Step = {experiment.step} - len(jax.random.split(next(self.rng), self._eval_enn_samples)) = {len(jax.random.split(next(experiment.rng), experiment._eval_enn_samples))}\n"
+# )
+
+# print(f"\nDEBUG: batch type is {type(batch)}")
+print(f"\nDEBUG: batch.x type is {type(batch.x)}")
+# print(f"\nDEBUG: batch len is {len(batch)}\n")
+print(f"\nDEBUG: batch.x len is {len(batch.x)}\n")
+
+random_keys = jax.random.split(next(experiment.rng), experiment._eval_enn_samples)
+
+print(f"\nDEBUG: random_keys shape = {random_keys.shape}\n")
+print(random_keys[:10])
+
+output = experiment._batch_fwd(
+    experiment.state.params, experiment.state.network_state, batch.x, random_keys
+)
+
+def aggregate_predictions_acc_to_index(
+    x_batch: np.ndarray, y_batch: np.ndarray, n_samples: int = 10
+    ):
+        """Aggregate the predictions according to the index.
+        The index can't be shown. """
+        pairs = []
+        if x_batch.shape[1] == 2:
+            x_batch = x_batch[:, 0]
+        for i in range(x_batch.shape[0]):
+            x_val = x_batch[i]
+            y_vals = y_batch[:n_samples, i]
+
+            for y_val in y_vals:
+                pairs.append((x_val, y_val.item()))
+
+        df = pd.DataFrame(pairs, columns=['x', 'y'])
+        return df
 
 
-# @title Plot the output
-# p = regression_data.make_plot(experiment=experiment, num_sample=10)
-# _ = p.draw()
-# _.savefig("./regression.png", dpi=300)
+def plot_predictions_with_index(dataframe: pd.DataFrame):
+    """Plot all the predictions varying with the index, for the given dataframe."""
+    p = (gg.ggplot(dataframe)
+        + gg.aes('x', 'y')
+        + gg.geom_point()
+        + gg.ylim(-9, 1)
+        + gg.xlim(-1, 2)
+      )
+    p.save("predictions_with_index.png", dpi=300)
 
+new_df = aggregate_predictions_acc_to_index(batch.x, output.preds, indices=random_keys)
+plot_predictions_with_index(new_df)
 
-datapoint = next(dataset).x
-print(type(datapoint))
-print(datapoint.shape)
-print(f"\nDEBUG: datapoint: {datapoint}\n")
-result = enn.apply(enn.state.params, datapoint)
-print(f"\nDEBUG: result: {result}\n")
+print(new_df.tail())
