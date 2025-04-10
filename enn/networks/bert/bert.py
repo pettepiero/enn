@@ -31,18 +31,17 @@ import jax.numpy as jnp
 # github.com/google-research/tf-slim/blob/master/tf_slim/layers/layers.py#L2346
 TF_LAYERNORM_EPSILON = 1e-12
 
-
 def make_bert_enn(
     bert_config: base.BertConfig,
     is_training: bool,
 ) -> base.BertEnn:
-  """Makes the BERT model as an ENN with state."""
+    """Makes the BERT model as an ENN with state."""
 
-  def net_fn(inputs: base.BertInput) -> networks_base.OutputWithPrior:
-    """Forwards the network (no index)."""
-    hidden_drop = bert_config.hidden_dropout_prob if is_training else 0.
-    att_drop = bert_config.attention_probs_dropout_prob if is_training else 0.
-    bert_model = BERT(
+    def net_fn(inputs: base.BertInput) -> networks_base.OutputWithPrior:
+        """Forwards the network (no index)."""
+        hidden_drop = bert_config.hidden_dropout_prob if is_training else 0.
+        att_drop = bert_config.attention_probs_dropout_prob if is_training else 0.
+        bert_model = BERT(
         vocab_size=bert_config.vocab_size,
         hidden_size=bert_config.hidden_size,
         num_hidden_layers=bert_config.num_hidden_layers,
@@ -55,31 +54,36 @@ def make_bert_enn(
         initializer_range=bert_config.initializer_range,
     )
 
-    # Embed and summarize the sequence.
-    return bert_model(  # pytype: disable=wrong-arg-types  # jax-devicearray
+        # Embed and summarize the sequence.
+        return bert_model(  # pytype: disable=wrong-arg-types  # jax-devicearray
         input_ids=inputs.token_ids,
         token_type_ids=inputs.segment_ids,
         input_mask=inputs.input_mask.astype(jnp.int32),
         is_training=is_training,
     )
 
-  # Transformed has the rng input, which we need to change --> index.
-  transformed = hk.transform_with_state(net_fn)
-  def apply(
+    # Transformed has the rng input, which we need to change --> index.
+    transformed = hk.transform_with_state(net_fn)
+    def apply(
       params: hk.Params,
       state: hk.State,
       inputs: base.BertInput,
       index: enn_base.Index,  # BERT operates with an RNG-key index.
   ) -> tp.Tuple[networks_base.OutputWithPrior, hk.State]:
-    key = index
-    return transformed.apply(params, state, key, inputs)
-  def init(rng_key: chex.PRNGKey,
-           inputs: base.BertInput,
-           index: enn_base.Index) -> tp.Tuple[hk.Params, hk.State]:
-    del index  # rng_key is duplicated in this case.
-    return transformed.init(rng_key, inputs)
+        #TODO: Validate that index is a valid RNG key
 
-  return base.BertEnn(apply, init, indexers.PrngIndexer())
+        key = index
+        return transformed.apply(
+            params, state, key, inputs
+        )  # added by Piero: apply(params, state, rng, *a, **k) this means that the epistemic index is the rng key!!
+
+    def init(
+        rng_key: chex.PRNGKey, inputs: base.BertInput, index: enn_base.Index
+    ) -> tp.Tuple[hk.Params, hk.State]:
+        del index  # rng_key is duplicated in this case.
+        return transformed.init(rng_key, inputs)
+
+    return base.BertEnn(apply, init, indexers.PrngIndexer())
 
 
 class BERT(hk.Module):
@@ -279,21 +283,21 @@ class BERT(hk.Module):
     last_layer = h
 
     # Masked language modelling logprobs.
-    mlm_hidden = hk.Linear(
-        self.hidden_size,
-        w_init=hk.initializers.TruncatedNormal(self.initializer_range),
-        name='mlm_dense')(last_layer)
-    mlm_hidden = jax.nn.gelu(mlm_hidden)
-    mlm_hidden = hk.LayerNorm(
-        axis=-1,
-        create_scale=True,
-        create_offset=True,
-        eps=TF_LAYERNORM_EPSILON,
-        name='mlm_ln')(mlm_hidden)
-    output_weights = jnp.transpose(word_embedder.embeddings)
-    logits = jnp.matmul(mlm_hidden, output_weights)
-    logits = hk.Bias(bias_dims=[-1], name='mlm_bias')(logits)
-    log_probs = jax.nn.log_softmax(logits, axis=-1)
+    # mlm_hidden = hk.Linear(
+    #     self.hidden_size,
+    #     w_init=hk.initializers.TruncatedNormal(self.initializer_range),
+    #     name='mlm_dense')(last_layer)
+    # mlm_hidden = jax.nn.gelu(mlm_hidden)
+    # mlm_hidden = hk.LayerNorm(
+    #     axis=-1,
+    #     create_scale=True,
+    #     create_offset=True,
+    #     eps=TF_LAYERNORM_EPSILON,
+    #     name='mlm_ln')(mlm_hidden)
+    # output_weights = jnp.transpose(word_embedder.embeddings)
+    # logits = jnp.matmul(mlm_hidden, output_weights)
+    # logits = hk.Bias(bias_dims=[-1], name='mlm_bias')(logits)
+    # log_probs = jax.nn.log_softmax(logits, axis=-1)
 
     # Pooled output: [CLS] token.
     first_token_last_layer = last_layer[..., 0, :]
@@ -304,9 +308,18 @@ class BERT(hk.Module):
             first_token_last_layer)
     pooled_output = jnp.tanh(pooled_output)
 
-    extra['logits'] = logits
-    extra['log_probs'] = log_probs
+    # Added by Piero: Classification head
+    ####################################################
+    num_classes = 2 
+    logits = hk.Linear(
+        num_classes,
+        w_init=hk.initializers.TruncatedNormal(self.initializer_range),
+        name="classifier_head"
+    )(pooled_output)
+
     extra['pooled_output'] = pooled_output
+    extra['classification_logits'] = logits
 
     return networks_base.OutputWithPrior(
-        train=pooled_output, prior=jnp.zeros_like(pooled_output), extra=extra)
+        train=logits, prior=jnp.zeros_like(pooled_output), extra=extra)
+    ####################################################

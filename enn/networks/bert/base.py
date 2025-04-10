@@ -23,7 +23,8 @@ from enn import base as enn_base
 from enn.networks import base as networks_base
 import numpy as np
 
-
+@jax.tree_util.register_pytree_node_class
+@dataclass
 class BertInput(tp.NamedTuple):
   """Input for the BERT model."""
   token_ids: np.ndarray
@@ -98,12 +99,12 @@ def bert_small() -> BertConfig:
       attention_probs_dropout_prob=0.1,
       hidden_act='gelu',
       hidden_dropout_prob=0.1,
-      hidden_size=768,
+      hidden_size=768, # H
       initializer_range=0.02,
       intermediate_size=3072,
       max_position_embeddings=512,
       num_attention_heads=12,
-      num_hidden_layers=12,
+      num_hidden_layers=12, # L
       type_vocab_size=2,
       vocab_size=30522,
   )

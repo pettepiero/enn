@@ -78,11 +78,18 @@ class NetworkTest(parameterized.TestCase):
         num_classes=output_size,
         sequence_len=128,
     )
+
+#    print(f"\n\n DEBUG: dir(fake_batch.x) = \n{dir(fake_batch.x)}\n")
+#    print(f"\n DEBUG: fake_batch = \n{fake_batch}\n")
     rng = hk.PRNGSequence(0)
     index = bert_enn.indexer(next(rng))
     params, state = bert_enn.init(next(rng), fake_batch.x, index)
     out, unused_new_state = bert_enn.apply(params, state, fake_batch.x, index)
+    #print(f"\n DEBUG: out.preds = {out.preds}, \n type(out.preds) = {type(out.preds)}\n")
+#    print(f"\n DEBUG: out.preds.shape = {out.preds.shape}\n")
     logits = networks_utils.parse_net_output(out)
+    print(f"\n DEBUG: logits = {logits}\n fake_batch.y = {fake_batch.y}\n")
+    print(f"DEBUG: logits.shape = {logits.shape}, fake_batch.y.shape = {fake_batch.y.shape}\n")
     self.assertEqual(logits.shape, (num_train, output_size))
 
 
